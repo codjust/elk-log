@@ -1,0 +1,38 @@
+input {
+    file {
+        path => ["/home/hcw/workdir/orskycloud-openresty/nginx/main_server/logs/error.log"]       
+    }    
+}
+
+filter {
+    mutate {
+        replace => {
+            "type" => "nginx-error"
+        }
+    }
+    multiline {
+        negate => 'true'
+        pattern => "^%{YEAR}/%{MONTHNUM}/%{MONTHDAY}"
+        what => 'previous'
+    }
+    mutate {
+        gsub => [ "message", "\r", "" ]
+    }
+    grok {
+        match => [
+            "message", "(?<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[%{DATA:nginx_severity}\] %{NOTSPACE} %{NOTSPACE} (?<nginx_message>(.|\r|\n)*)(?:, client: (?<nginx_client_ip>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:nginx_server})(?:, request: %{QS:nginx_request})?(?:, host: %{QS:nginx_host})?(?:, referrer: \"%{URI:nginx_referrer})?"
+        ]
+    }
+    mutate {
+        remove_tag => [ "multiline" ]
+    }
+    ruby {
+        code => "event['logdate'] = event.timestamp.time.localtime.to_i - 28800"
+    }
+}
+
+output {
+    stdout {
+        codec => rubydebug
+    }
+}
